@@ -14,9 +14,8 @@
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
         .active-btn { background-color: #4f46e5 !important; color: white !important; border-color: #4f46e5 !important; }
         .bonus-active { background-color: #f97316 !important; color: white !important; border-color: #f97316 !important; }
-        canvas { max-height: 320px !important; width: 100% !important; }
-        .pulse-animation { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        canvas { max-height: 280px !important; width: 100% !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -28,32 +27,33 @@
         const App = () => {
             const [mode, setMode] = useState('cancer');
             const [showResetConfirm, setShowResetConfirm] = useState(false);
+            const [activeGuide, setActiveGuide] = useState(null);
 
-            // Scoring Definitions
+            // Detailed item definitions based on the provided document
             const cancerItems = [
-                { id: 'nuclearLayering', label: '核重積性', options: [{v:5, l:'5(2-3層)'}, {v:3, l:'3(一部)'}, {v:-2, l:'-2(1層)'}] },
-                { id: 'atypicalClusters', label: '異形細胞集塊', options: [{v:5, l:'5(篩/樹)'}, {v:4, l:'4(分岐)'}, {v:1, l:'1(円/管)'}] },
-                { id: 'glandDensity', label: '腺密度(x10)', options: [{v:5, l:'5(10個~)'}, {v:3, l:'3(6-7個)'}, {v:1, l:'1(なし)'}] },
-                { id: 'stromaAmount', label: '間質細胞量', options: [{v:5, l:'5(極少)'}, {v:4, l:'4(少)'}, {v:3, l:'3'}, {v:-2, l:'-2(富)'}] },
-                { id: 'stromaClusters', label: '間質集塊', options: [{v:5, l:'5(なし)'}, {v:4, l:'4(少)'}, {v:1, l:'1(多)'}] },
-                { id: 'cohesionLack', label: '結合性欠如', options: [{v:5, l:'5(著)'}, {v:3, l:'3(一部)'}, {v:1, l:'1(保持)'}] },
-                { id: 'nuclearEnlargement', label: '核大型化', options: [{v:5, l:'5(大)'}, {v:3, l:'3(中)'}, {v:1, l:'1(小)'}] },
-                { id: 'nuclearIrregularity', label: '核形不整', options: [{v:5, l:'5(明)'}, {v:4, l:'4(一部)'}, {v:3, l:'3(なし)'}] },
-                { id: 'neutrophilCount', label: '好中球(x40)', options: [{v:5, l:'5(30~)'}, {v:3, l:'3(10~)'}, {v:1, l:'1(無)'}] },
-                { id: 'neutrophilInvasion', label: '上皮内好中球', options: [{v:5, l:'5(多)'}, {v:3, l:'3(1個)'}, {v:1, l:'1(なし)'}] },
+                { id: 'nuclearLayering', label: '核重積性', guide: '2～3層は5点。一部重積は3点。1層(シート状)は不整形であっても－2点とする。', options: [{v:5, l:'5 (2-3層)'}, {v:3, l:'3 (一部)'}, {v:-2, l:'-2 (1層)'}] },
+                { id: 'atypicalClusters', label: '異形細胞集塊', guide: '篩状(cribriform)、樹枝状、back to backは少数でも5点。分岐や乳頭状が目立つ場合は4点。円形や土管状のみは1点。', options: [{v:5, l:'5 (篩/樹枝)'}, {v:4, l:'4 (分岐)'}, {v:1, l:'1 (円/管)'}] },
+                { id: 'glandDensity', label: '腺密度', guide: '対物10倍で最高密度の部分を測定。10個以上は5点、6～7個は3点、5個以下は2点、なしは1点。', options: [{v:5, l:'5 (10個~)'}, {v:3, l:'3 (6-7個)'}, {v:2, l:'2 (5個↓)'}, {v:1, l:'1 (無)'}] },
+                { id: 'stromaAmount', label: '間質細胞の量', guide: '異型上皮に対しての量を観察。極めて少ない(上皮優位)は5点。上皮:間質=1:1なら3点。豊富なら－2点。', options: [{v:5, l:'5 (極少)'}, {v:4, l:'4 (少)'}, {v:3, l:'3 (1:1)'}, {v:-2, l:'-2 (豊富)'}] },
+                { id: 'stromaClusters', label: '間質集塊', guide: '異型細胞集塊の周囲を観察。認めない場合は5点。少数なら4点。大型集塊で多数認める場合は1点。', options: [{v:5, l:'5 (なし)'}, {v:4, l:'4 (少数)'}, {v:1, l:'1 (多数)'}] },
+                { id: 'cohesionLack', label: '結合性の欠如', guide: '小集塊や孤在性が目立つ(結合性欠如)は5点。分化度が低いほど欠如する傾向。保持されている場合は1点。', options: [{v:5, l:'5 (著明)'}, {v:4, l:'4 (やや)'}, {v:1, l:'1 (保持)'}] },
+                { id: 'nuclearEnlargement', label: '核の大型化', guide: '全体的な核の大きさに着目。増殖期の核を中型(3点)とする。高齢・萎縮内膜の場合は萎縮核を3点とする。', options: [{v:5, l:'5 (大型)'}, {v:3, l:'3 (中型)'}, {v:1, l:'1 (小型)'}] },
+                { id: 'nuclearIrregularity', label: '核形不整', guide: '目立つ場合は5点。G1(高分化)では目立たないことが多いが、ひずみや切れ込みがあれば5点とする。なしは3点。', options: [{v:5, l:'5 (目立つ)'}, {v:4, l:'4 (一部)'}, {v:3, l:'3 (なし)'}] },
+                { id: 'neutrophilCount', label: '好中球の数', guide: '対物40倍で最高密度の部分。30個以上は5点。10～20個は3点。良性では30個以上みられることは稀。', options: [{v:5, l:'5 (30個~)'}, {v:3, l:'3 (10~)'}, {v:1, l:'1 (無/少)'}] },
+                { id: 'neutrophilInvasion', label: '上皮内侵入像', guide: '異型集塊内に好中球を多く認める(2～3個)場合は5点。集塊内に1個なら3点。なしは1点。', options: [{v:5, l:'5 (多い)'}, {v:3, l:'3 (1個)'}, {v:1, l:'1 (なし)'}] },
             ];
 
             const hyperplasiaItems = [
-                { id: 'nuclearLayering', label: '核重積性', options: [{v:5, l:'5(2-3層)'}, {v:3, l:'3(一部)'}, {v:-2, l:'-2(1層)'}] },
-                { id: 'atypicalClusters', label: '異形細胞集塊', options: [{v:5, l:'5(乳/BTB)'}, {v:3, l:'3'}, {v:1, l:'1(円/管)'}] },
-                { id: 'largeClusters', label: '大型細胞集塊', options: [{v:5, l:'5(有)'}, {v:3, l:'3'}, {v:1, l:'1(無)'}] },
-                { id: 'branchingClusters', label: '分岐細胞集塊', options: [{v:5, l:'5(明)'}, {v:3, l:'3'}, {v:1, l:'1(無)'}] },
-                { id: 'glandDensity', label: '腺密度(x10)', options: [{v:5, l:'5(6個~)'}, {v:3, l:'3'}, {v:1, l:'1(2個↓)'}] },
-                { id: 'terminalBranching', label: '有端分岐', options: [{v:5, l:'5(2割~)'}, {v:3, l:'3'}, {v:1, l:'1(無)'}] },
-                { id: 'stromaComponent', label: '間質成分', options: [{v:5, l:'5(極少)'}, {v:3, l:'3(1:1)'}, {v:1, l:'1(豊富)'}] },
-                { id: 'stromaClusters', label: '間質集塊', options: [{v:5, l:'5(なし)'}, {v:4, l:'4'}, {v:1, l:'1(多)'}] },
-                { id: 'nuclearEnlargement', label: '核大型化', options: [{v:5, l:'5(大)'}, {v:3, l:'3(中)'}, {v:1, l:'1(小)'}] },
-                { id: 'neutrophilCount', label: '好中球(x40)', options: [{v:5, l:'5(30~)'}, {v:3, l:'3'}, {v:1, l:'1(少)'}] },
+                { id: 'nuclearLayering', label: '核重積性', guide: '2～3層は5点。一部重積は3点。1層(シート状)は対象外として－2点。', options: [{v:5, l:'5 (2-3層)'}, {v:3, l:'3 (一部)'}, {v:-2, l:'-2 (1層)'}] },
+                { id: 'atypicalClusters', label: '異形細胞集塊', guide: '乳頭状やback to back様など不整形が多い場合は5点。一部不整形は3点。円形や土管状は1点。', options: [{v:5, l:'5 (不整多)'}, {v:3, l:'3 (一部)'}, {v:1, l:'1 (円/管)'}] },
+                { id: 'largeClusters', label: '大型細胞集塊', guide: '大型の集塊が目立つ場合は5点。一部にみるなら3点。なしは1点。', options: [{v:5, l:'5 (目立つ)'}, {v:3, l:'3 (一部)'}, {v:1, l:'1 (なし)'}] },
+                { id: 'branchingClusters', label: '分岐細胞集塊', guide: '2～3分岐など分岐が目立つ場合は5点。2分岐までは3点。なしは1点。', options: [{v:5, l:'5 (2-3分)'}, {v:3, l:'3 (2分迄)'}, {v:1, l:'1 (なし)'}] },
+                { id: 'glandDensity', label: '腺密度', guide: '対物10倍。6～7個以上は5点。4～5個は3点。2個以下は1点。', options: [{v:5, l:'5 (6-7個~)'}, {v:3, l:'3 (4-5個)'}, {v:1, l:'1 (2個↓)'}] },
+                { id: 'terminalBranching', label: '有端分岐集塊', guide: '全体の20%以上に有端分岐が目立つ場合は5点。数ヶ所なら3点。なしは1点。', options: [{v:5, l:'5 (20%~)'}, {v:3, l:'3 (数ヶ所)'}, {v:1, l:'1 (なし)'}] },
+                { id: 'stromaComponent', label: '間質成分', guide: '上皮成分が間質に対して優位であることがCH以上の不可欠な所見。極めて少なければ5点。', options: [{v:5, l:'5 (極少)'}, {v:3, l:'3 (1:1)'}, {v:1, l:'1 (豊富)'}] },
+                { id: 'stromaClusters', label: '間質細胞集塊', guide: '認めない場合は5点。少数なら4点。凝集状間質細胞集塊が多い場合は－2点とする。', options: [{v:5, l:'5 (なし)'}, {v:4, l:'4 (少数)'}, {v:1, l:'1 (多数)'}] },
+                { id: 'nuclearEnlargement', label: '核の大型化', guide: '全体的に大型な場合は5点。増殖期の核に類似するのが一般的。萎縮内膜との比較で判断。', options: [{v:5, l:'5 (大型)'}, {v:3, l:'3 (中型)'}, {v:1, l:'1 (小型)'}] },
+                { id: 'neutrophilCount', label: '好中球の数', guide: '対物40倍。30個以上は5点。増殖症では癌に比べ30個以上みられることは稀。', options: [{v:5, l:'5 (30個~)'}, {v:3, l:'3 (10~)'}, {v:1, l:'1 (少数)'}] },
             ];
 
             const getInitialScores = () => {
@@ -66,11 +66,7 @@
             const [bonuses, setBonuses] = useState({});
 
             const currentItems = mode === 'cancer' ? cancerItems : hyperplasiaItems;
-
-            // 全項目が入力されているかチェック
-            const isCompleted = useMemo(() => {
-                return currentItems.every(item => scores[item.id] !== null);
-            }, [scores, currentItems]);
+            const isCompleted = useMemo(() => currentItems.every(item => scores[item.id] !== null), [scores, currentItems]);
 
             const executeReset = () => {
                 setScores(getInitialScores());
@@ -94,13 +90,12 @@
 
             const diagnosis = useMemo(() => {
                 if (!isCompleted) return { label: '未入力の項目があります', color: 'text-slate-400', bg: 'bg-slate-100' };
-                if (mode !== 'cancer') return { label: `増殖症スコア判定中`, color: 'text-indigo-600', bg: 'bg-indigo-50' };
-                
-                if (totalScore >= 47) return { label: '要生検：悪性', color: 'text-red-600', bg: 'bg-red-50' };
-                if (totalScore >= 40) return { label: '要生検：悪性を強く疑う', color: 'text-orange-600', bg: 'bg-orange-50' };
-                if (totalScore >= 35) return { label: '要生検：悪性を疑う', color: 'text-yellow-600', bg: 'bg-yellow-50' };
-                if (totalScore >= 30) return { label: '経過観察：異型内膜', color: 'text-blue-600', bg: 'bg-blue-50' };
-                return { label: '良性', color: 'text-green-600', bg: 'bg-green-50' };
+                if (mode !== 'cancer') return { label: `増殖症スコアリング完了`, color: 'text-indigo-600', bg: 'bg-indigo-50' };
+                if (totalScore >= 47) return { label: '要生検：悪性 (47~)', color: 'text-red-600', bg: 'bg-red-50' };
+                if (totalScore >= 40) return { label: '要生検：悪性を強く疑う (40~46)', color: 'text-orange-600', bg: 'bg-orange-50' };
+                if (totalScore >= 35) return { label: '要生検：悪性を疑う (35~39)', color: 'text-yellow-600', bg: 'bg-yellow-50' };
+                if (totalScore >= 30) return { label: '経過観察：異型内膜 (30~34)', color: 'text-blue-600', bg: 'bg-blue-50' };
+                return { label: '良性 (29以下)', color: 'text-green-600', bg: 'bg-green-50' };
             }, [totalScore, mode, isCompleted]);
 
             useEffect(() => {
@@ -108,20 +103,17 @@
                 if (!ctx) return;
                 const existingChart = Chart.getChart(ctx);
                 if (existingChart) existingChart.destroy();
-
-                const chartScores = currentItems.map(i => scores[i.id] === null ? null : scores[i.id]);
-
                 new Chart(ctx, {
                     type: 'radar',
                     data: {
                         labels: currentItems.map(i => i.label),
                         datasets: [{
-                            data: chartScores,
+                            data: currentItems.map(i => scores[i.id]),
                             backgroundColor: mode === 'cancer' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(79, 70, 229, 0.2)',
                             borderColor: mode === 'cancer' ? 'rgb(239, 68, 68)' : 'rgb(79, 70, 229)',
                             borderWidth: 2,
                             pointRadius: 4,
-                            spanGaps: true // 未入力項目をスキップして線を繋ぐ
+                            spanGaps: true
                         }]
                     },
                     options: {
@@ -133,13 +125,14 @@
             }, [scores, mode, currentItems]);
 
             return (
-                <div className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col relative">
-                    {/* Confirmation Overlay */}
+                <div className="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col relative pb-10">
+                    
+                    {/* Reset Confirmation Overlay */}
                     {showResetConfirm && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl p-6 w-full shadow-2xl">
-                                <h2 className="text-lg font-black mb-2">評価をリセット</h2>
-                                <p className="text-sm text-slate-500 mb-6 leading-relaxed">全ての入力を未選択状態に戻します。よろしいですか？</p>
+                                <h2 className="text-lg font-black mb-2">評価をクリア</h2>
+                                <p className="text-sm text-slate-500 mb-6">すべての入力をリセットして最初から診断を始めますか？</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <button onClick={() => setShowResetConfirm(false)} className="py-3 font-bold bg-slate-100 text-slate-600 rounded-2xl">キャンセル</button>
                                     <button onClick={executeReset} className="py-3 font-bold bg-red-600 text-white rounded-2xl active:bg-red-700 shadow-lg shadow-red-200">リセット</button>
@@ -148,67 +141,80 @@
                         </div>
                     )}
 
+                    {/* Guide Modal */}
+                    {activeGuide && (
+                        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-[2px] p-4" onClick={() => setActiveGuide(null)}>
+                            <div className="bg-white rounded-[2.5rem] p-8 w-full shadow-2xl animate-in slide-in-from-bottom duration-300" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h2 className="text-lg font-black text-indigo-700">{activeGuide.label} の判定基準</h2>
+                                    <button onClick={() => setActiveGuide(null)} className="text-slate-300 hover:text-slate-600">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                                <p className="text-slate-600 text-sm leading-relaxed mb-6 font-medium italic border-l-4 border-indigo-200 pl-4">
+                                    {activeGuide.guide}
+                                </p>
+                                <button onClick={() => setActiveGuide(null)} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 active:scale-95 transition-all">
+                                    確認しました
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Header */}
-                    <header className="bg-white px-4 pt-6 pb-4 shadow-sm border-b sticky top-0 z-20">
+                    <header className="bg-white/80 backdrop-blur-md px-4 pt-6 pb-4 shadow-sm border-b sticky top-0 z-20">
                         <div className="flex justify-between items-center mb-4">
-                            <h1 className="text-lg font-black flex items-center gap-2">
-                                <span className="bg-indigo-600 p-1.5 rounded-lg text-white">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                                </span>
-                                <span>大野式 Radar App</span>
+                            <h1 className="text-lg font-black tracking-tight text-slate-800 flex items-center gap-2">
+                                <span className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xs">Radar</span>
+                                <span>大野式 診断ツール</span>
                             </h1>
-                            <button onClick={() => setShowResetConfirm(true)} className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100 active:bg-red-50 active:text-red-600 transition-all">
-                                🔄 戻す
+                            <button onClick={() => setShowResetConfirm(true)} className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full hover:text-red-600 transition-colors">
+                                🔄 初期化
                             </button>
                         </div>
-                        <div className="flex bg-slate-100 p-1.5 rounded-2xl text-sm font-bold">
-                            <button onClick={() => setMode('cancer')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'cancer' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>体がん</button>
-                            <button onClick={() => setMode('hyperplasia')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'hyperplasia' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>増殖症</button>
+                        <div className="flex bg-slate-100 p-1 rounded-2xl text-xs font-bold">
+                            <button onClick={() => setMode('cancer')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'cancer' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>体がんレーダー</button>
+                            <button onClick={() => setMode('hyperplasia')} className={`flex-1 py-3 rounded-xl transition-all ${mode === 'hyperplasia' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>増殖症レーダー</button>
                         </div>
                     </header>
 
-                    {/* Score Panel */}
-                    <div className="p-4">
-                        <div className={`p-6 rounded-[2rem] border-2 text-center transition-all duration-300 ${diagnosis.bg} ${isCompleted ? diagnosis.color.replace('text', 'border') : 'border-dashed border-slate-200'}`}>
-                            <div className="text-[10px] font-black uppercase tracking-widest opacity-40">Total Score</div>
-                            <div className={`text-6xl font-black my-1 tracking-tighter transition-all ${isCompleted ? 'text-slate-800 scale-110' : 'text-slate-200 pulse-animation'}`}>
+                    {/* Score View */}
+                    <div className="p-4 pt-6">
+                        <div className={`p-8 rounded-[2.5rem] border-2 text-center transition-all duration-500 shadow-sm ${diagnosis.bg} ${isCompleted ? diagnosis.color.replace('text', 'border') : 'border-dashed border-slate-200'}`}>
+                            <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 mb-2">Total Diagnosis Score</div>
+                            <div className={`text-7xl font-black tracking-tighter transition-all ${isCompleted ? 'text-slate-800' : 'text-slate-200'}`}>
                                 {isCompleted ? totalScore : '--'}
                             </div>
-                            <div className={`text-sm font-black ${diagnosis.color}`}>{diagnosis.label}</div>
+                            <div className={`text-sm font-bold mt-2 ${diagnosis.color}`}>{diagnosis.label}</div>
                         </div>
                     </div>
 
-                    {/* Chart Card */}
+                    {/* Chart Container */}
                     <div className="px-4 mb-4">
-                        <div className="bg-white p-4 rounded-[2rem] border shadow-sm aspect-square flex items-center justify-center relative">
+                        <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-center relative min-h-[300px]">
                             <canvas id="radarChart"></canvas>
-                            {!isCompleted && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-white/20 pointer-events-none">
-                                    <span className="text-[10px] font-bold text-slate-300 bg-white/80 px-4 py-2 rounded-full border shadow-sm">
-                                        入力に合わせてグラフが生成されます
-                                    </span>
-                                </div>
-                            )}
                         </div>
                     </div>
 
-                    {/* Inputs */}
-                    <div className="px-4 pb-20 space-y-6">
-                        <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-                            <h3 className="text-sm font-black mb-6 text-slate-800 flex items-center gap-2">
-                                <span className="w-1.5 h-4 bg-indigo-600 rounded-full"></span>
-                                基本評価（全10項目）
+                    {/* Scoring Form */}
+                    <div className="px-4 space-y-6">
+                        <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm">
+                            <h3 className="text-xs font-black mb-8 text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full"></span> 評価セクション
                             </h3>
-                            <div className="space-y-10">
+                            <div className="space-y-12">
                                 {currentItems.map(item => (
-                                    <div key={item.id} className={`space-y-3 transition-opacity ${scores[item.id] === null ? 'opacity-100' : 'opacity-100'}`}>
+                                    <div key={item.id} className="space-y-3">
                                         <div className="flex justify-between items-center px-1">
-                                            <span className={`text-sm font-bold transition-colors ${scores[item.id] === null ? 'text-slate-800' : 'text-slate-400'}`}>
-                                                {item.label} {scores[item.id] === null && <span className="text-red-500 ml-1 font-black text-xs">*</span>}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-sm font-black text-slate-700">{item.label}</span>
+                                                <button onClick={() => setActiveGuide(item)} className="p-1 text-slate-300 hover:text-indigo-400">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                </button>
+                                            </div>
                                             {scores[item.id] !== null && (
-                                                <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg border border-indigo-100">
-                                                    Score: {scores[item.id]}
+                                                <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg border border-indigo-100 italic">
+                                                    Pt: {scores[item.id]}
                                                 </span>
                                             )}
                                         </div>
@@ -217,7 +223,7 @@
                                                 <button
                                                     key={opt.v}
                                                     onClick={() => setScores({...scores, [item.id]: opt.v})}
-                                                    className={`flex-1 py-4 text-[11px] font-bold rounded-2xl border transition-all active:scale-95 ${scores[item.id] === opt.v ? 'active-btn shadow-lg shadow-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                                                    className={`flex-1 py-4 text-[10px] font-black rounded-2xl border transition-all active:scale-95 ${scores[item.id] === opt.v ? 'active-btn shadow-lg shadow-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
                                                 >
                                                     {opt.l}
                                                 </button>
@@ -228,11 +234,10 @@
                             </div>
                         </div>
 
-                        {/* Bonus Section (Always visible but score only added when basic items complete) */}
-                        <div className="bg-white p-6 rounded-[2rem] border shadow-sm mb-10">
-                            <h3 className="text-sm font-black mb-4 text-slate-800 flex items-center gap-2">
-                                <span className="w-1.5 h-4 bg-orange-500 rounded-full"></span>
-                                特殊所見
+                        {/* Special Features */}
+                        <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm mb-10">
+                            <h3 className="text-xs font-black mb-4 text-orange-400 uppercase tracking-widest flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-orange-400 rounded-full"></span> 加点・特殊所見
                             </h3>
                             <div className="flex flex-wrap gap-2">
                                 {mode === 'cancer' ? (
@@ -248,12 +253,15 @@
                                     </>
                                 )}
                             </div>
-                            {!isCompleted && <p className="text-[10px] text-orange-400 mt-3 italic">* 基本項目の入力後に加算されます</p>}
                         </div>
                     </div>
 
-                    <footer className="py-8 text-center text-[10px] text-slate-400 px-6">
-                        <p>© 上尾中央総合病院 大野喜作「大野式診断基準」</p>
+                    <footer className="py-12 text-center px-10">
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">Developed for Diagnostics</p>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                            上尾中央総合病院 大野喜作 考案<br/>
+                            子宮内膜増殖性病変の細胞診診断基準に基づく
+                        </p>
                     </footer>
                 </div>
             );
@@ -262,15 +270,4 @@
         const BonusToggle = ({ active, onClick, label }) => (
             <button 
                 onClick={onClick}
-                className={`px-4 py-3 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${active ? 'bonus-active shadow-lg shadow-orange-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
-            >
-                {active ? '✅ ' : '+ '} {label}
-            </button>
-        );
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
-
+                
